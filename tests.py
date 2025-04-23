@@ -157,4 +157,25 @@ Wait 5 seconds
 CHECK: Devin should have replied to your message on that thread saying that he is going to sleep
 """,
     ),
+    create_qa_test(
+        test_name="devin-code-explanation",
+        user_prompt=f"""{DEVIN_QA_LOGIN_INSTRUCTIONS}
+Then start a new session with the prompt "Explain how a binary search algorithm works and provide a Python implementation of it."
+You need to press ctrl+enter to start a session.
+CHECK: Your new session should have started successfully and it should have taken you to the session page.
+
+Wait for 90 seconds.
+
+CHECK: Devin should have sent you a message explaining the binary search algorithm.
+CHECK: The explanation should include the time complexity of binary search (O(log n)).
+CHECK: The message should include a Python implementation of the binary search algorithm.
+
+Send a message asking "Can you explain the edge cases I should consider when implementing binary search?"
+Wait for 60 seconds.
+
+CHECK: Devin should have sent you a new message explaining edge cases for binary search.
+CHECK: The explanation should mention handling empty arrays or lists.
+CHECK: The explanation should discuss how to handle cases when the target element is not found.
+""",
+    ),
 ]
