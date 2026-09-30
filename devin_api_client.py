@@ -1,5 +1,6 @@
 import asyncio
 import json
+import math
 import os
 from typing import Literal, TypedDict
 
@@ -74,10 +75,12 @@ class DevinAPIClient:
         if (
             isinstance(timeout_seconds, bool)
             or not isinstance(timeout_seconds, (int, float))
+            or not math.isfinite(timeout_seconds)
             or timeout_seconds <= 0
         ):
             raise ValueError(
-                f"timeout_seconds must be a positive number, got {timeout_seconds!r}"
+                f"timeout_seconds must be a positive finite number, "
+                f"got {timeout_seconds!r}"
             )
         self.api_key = api_key
         self.base_url = base_url
@@ -96,7 +99,8 @@ class DevinAPIClient:
                     method, f"{self.base_url}{path}", headers=self.headers, **kwargs
                 ) as response,
             ):
-                text = await response.text()
+                raw = await response.read()
+                text = raw.decode(response.get_encoding(), errors="replace")
                 if response.status >= 400:
                     raise DevinAPIError(
                         f"Devin API {method} {path} failed with HTTP "
@@ -159,7 +163,11 @@ class DevinAPIClient:
         try:
             data = await self._request("GET", f"/session/{session_id}")
         except DevinAPIError as exc:
-            if exc.body and "Session not found" in str(exc.body):
+            try:
+                body = json.loads(exc.body) if exc.status == 404 else None
+            except (TypeError, json.JSONDecodeError):
+                body = None
+            if isinstance(body, dict) and body.get("detail") == "Session not found":
                 return None
             raise
         if data.get("detail") == "Session not found":

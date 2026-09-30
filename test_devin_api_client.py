@@ -7,6 +7,7 @@ is already a project dependency.
 Run: python -m unittest test_devin_api_client -v
 """
 
+import math
 import unittest
 
 from aiohttp import web
@@ -112,6 +113,11 @@ class DevinAPIClientTests(unittest.IsolatedAsyncioTestCase):
 
     def test_invalid_timeout_values_rejected(self):
         for bad in (0, -5, -0.1, None, "30"):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                DevinAPIClient(API_KEY, timeout_seconds=bad)
+
+    def test_non_finite_timeout_values_rejected(self):
+        for bad in (math.nan, math.inf, -math.inf):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
                 DevinAPIClient(API_KEY, timeout_seconds=bad)
 
@@ -226,6 +232,66 @@ class DevinAPIClientTests(unittest.IsolatedAsyncioTestCase):
         )
         with self.assertRaises(DevinAPIError):
             await client.get_session_status("s")
+
+    async def test_500_containing_session_not_found_substring_raises(self):
+        client = await self.client_for(
+            json_handler(
+                500, '{"detail": "Unable to check: Session not found in cache"}'
+            )
+        )
+        with self.assertRaises(DevinAPIError) as ctx:
+            await client.get_session_status("s")
+        self.assertEqual(ctx.exception.status, 500)
+
+    async def test_404_non_json_body_containing_substring_raises(self):
+        async def handler(request):
+            return web.Response(
+                status=404,
+                text="Session not found somewhere upstream",
+                content_type="text/plain",
+            )
+
+        client = await self.client_for(handler)
+        with self.assertRaises(DevinAPIError):
+            await client.get_session_status("s")
+
+    # ---- malformed response bytes ----
+
+    async def test_invalid_bytes_with_declared_charset_raises(self):
+        async def handler(request):
+            return web.Response(
+                status=200,
+                body=b"\xff\xfe\x00not-valid-utf8",
+                headers={"Content-Type": "application/json; charset=utf-8"},
+            )
+
+        client = await self.client_for(handler)
+        with self.assertRaises(DevinAPIError):
+            await client.check_auth()
+
+    # ---- redirect credential hygiene ----
+
+    async def test_cross_origin_redirect_does_not_forward_authorization(self):
+        captured = {}
+
+        async def handler_b(request):
+            captured["authorization"] = request.headers.get("Authorization")
+            return web.Response(
+                status=200,
+                text='{"status": "ok", "org_id": "o"}',
+                content_type="application/json",
+            )
+
+        runner_b, base_b = await start_server(handler_b)
+        self._runners.append(runner_b)
+
+        async def handler_a(request):
+            raise web.HTTPFound(f"{base_b}/auth_status")
+
+        client = await self.client_for(handler_a)
+        result = await client.check_auth()
+        self.assertEqual(result["status"], "ok")
+        self.assertIsNone(captured.get("authorization"))
 
     # ---- secret hygiene ----
 
