@@ -318,6 +318,24 @@ class DevinAPIClientTests(unittest.IsolatedAsyncioTestCase):
             self.assertNotIn(API_KEY, str(exc))
             self.assertNotIn(API_KEY, repr(exc))
 
+    async def test_error_body_echoing_api_key_is_redacted(self):
+        client = await self.client_for(
+            json_handler(
+                401,
+                f'{{"detail": "upstream diagnostic: Bearer {API_KEY} echoed"}}',
+            )
+        )
+        try:
+            await client.check_auth()
+            self.fail("expected DevinAPIError")
+        except DevinAPIError as exc:
+            self.assertNotIn(API_KEY, str(exc))
+            self.assertNotIn(API_KEY, repr(exc))
+            self.assertNotIn(API_KEY, str(exc.body))
+            self.assertNotIn(f"Bearer {API_KEY}", str(exc))
+            self.assertIn("upstream diagnostic", str(exc))
+            self.assertIn("[REDACTED]", str(exc))
+
 
 if __name__ == "__main__":
     unittest.main()

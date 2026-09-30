@@ -100,7 +100,9 @@ class DevinAPIClient:
                 ) as response,
             ):
                 raw = await response.read()
-                text = raw.decode(response.get_encoding(), errors="replace")
+                text = self._sanitize(
+                    raw.decode(response.get_encoding(), errors="replace")
+                )
                 if response.status >= 400:
                     raise DevinAPIError(
                         f"Devin API {method} {path} failed with HTTP "
@@ -137,14 +139,18 @@ class DevinAPIClient:
                 f"Devin API {method} {path} failed: {exc}"
             ) from exc
 
-    @staticmethod
-    def _require_keys(data: dict, keys: tuple[str, ...], label: str) -> None:
+    def _sanitize(self, text: str) -> str:
+        return text.replace(f"Bearer {self.api_key}", "[REDACTED]").replace(
+            self.api_key, "[REDACTED]"
+        )
+
+    def _require_keys(self, data: dict, keys: tuple[str, ...], label: str) -> None:
         missing = [key for key in keys if key not in data]
         if missing:
             raise DevinAPIError(
                 f"Devin API {label} returned HTTP 200 with a payload missing "
                 f"required keys {missing}",
-                body=data,
+                body=self._sanitize(repr(data)),
             )
 
     async def check_auth(self) -> DevinAPIAuthResponse:
