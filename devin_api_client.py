@@ -72,6 +72,8 @@ class DevinAPIClient:
         base_url: str = BASE_URL,
         timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
     ):
+        if not isinstance(api_key, str) or not api_key.strip():
+            raise ValueError("api_key must be a non-empty string")
         if (
             isinstance(timeout_seconds, bool)
             or not isinstance(timeout_seconds, (int, float))

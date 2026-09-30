@@ -116,6 +116,21 @@ class DevinAPIClientTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
                 DevinAPIClient(API_KEY, timeout_seconds=bad)
 
+    def test_empty_api_key_rejected(self):
+        for bad in ("", "   ", "\t\n"):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                DevinAPIClient(bad)
+
+    def test_sanitize_preserves_diagnostic_text(self):
+        client = DevinAPIClient(API_KEY)
+        text = "upstream diagnostic: status=500 path=/sessions"
+        self.assertEqual(client._sanitize(text), text)
+        echoed = f"upstream said Bearer {API_KEY}"
+        sanitized = client._sanitize(echoed)
+        self.assertNotIn(API_KEY, sanitized)
+        self.assertIn("[REDACTED]", sanitized)
+        self.assertIn("upstream said", sanitized)
+
     def test_non_finite_timeout_values_rejected(self):
         for bad in (math.nan, math.inf, -math.inf):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
